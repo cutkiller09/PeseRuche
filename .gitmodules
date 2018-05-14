@@ -7,3 +7,6 @@
 [submodule "HX711-Load-Cell-Amplifier"]
 	path = HX711-Load-Cell-Amplifier
 	url = https://github.com/sparkfun/HX711-Load-Cell-Amplifier.git
+[submodule "Arduino-Eagle-Cad-Library"]
+	path = Arduino-Eagle-Cad-Library
+	url = https://github.com/cyberlink1/Arduino-Eagle-Cad-Library.git
