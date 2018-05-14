@@ -4,3 +4,6 @@
 [submodule "arduino-mcp2515"]
 	path = arduino-mcp2515
 	url = https://github.com/autowp/arduino-mcp2515.git
+[submodule "HX711-Load-Cell-Amplifier"]
+	path = HX711-Load-Cell-Amplifier
+	url = https://github.com/sparkfun/HX711-Load-Cell-Amplifier.git
