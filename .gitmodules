@@ -10,3 +10,6 @@
 [submodule "Arduino-Eagle-Cad-Library"]
 	path = Arduino-Eagle-Cad-Library
 	url = https://github.com/cyberlink1/Arduino-Eagle-Cad-Library.git
+[submodule "SigFox"]
+	path = SigFox
+	url = https://github.com/arduino-libraries/SigFox.git
