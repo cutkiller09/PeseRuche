@@ -13,3 +13,6 @@
 [submodule "SigFox"]
 	path = SigFox
 	url = https://github.com/arduino-libraries/SigFox.git
+[submodule "LowPower"]
+	path = LowPower
+	url = https://github.com/LowPowerLab/LowPower.git
