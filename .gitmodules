@@ -16,3 +16,6 @@
 [submodule "LowPower"]
 	path = LowPower
 	url = https://github.com/LowPowerLab/LowPower.git
+[submodule "MKRFox1200_weather_station"]
+	path = MKRFox1200_weather_station
+	url = https://github.com/AntoinedeChassey/MKRFox1200_weather_station.git
