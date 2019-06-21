@@ -5,16 +5,18 @@
 
 #define DEBUG
 #define KEY_REINIT 0x55
-#define DEBUG
 #define K_POS_ID_CAN_FRAME 7
 #define K_POS_REINIT_CAN_FRAME 6
   
 static boolean b_Reinit=0;
+static unsigned int u8_ID_MAX;
   
-/******************/
-/* Interface CAN  */
-// canMsg.data[K_POS_ID_CAN_FRAME] : 0x55 => Demande de reinitialisation
-// canMsg.data[K_POS_REINIT_CAN_FRAME] : ID CAN
+/******************************************************************************/
+/*                             Interface CAN                                  */
+/*                                                                            */
+/* canMsg.data[K_POS_ID_CAN_FRAME] : 0x55 => Demande de reinitialisation      */
+/* canMsg.data[K_POS_REINIT_CAN_FRAME] : ID CAN                               */
+/******************************************************************************/
 
 #ifdef DEBUG
 char buffer[8]; 
@@ -27,28 +29,40 @@ struct can_frame canMsg_Write;
 MCP2515 mcp2515(10);
 
 
+/*************************************************************/
+/*            Module d'initialisation du CAN                 */
+/*************************************************************/
 void Init_Can() 
 {   
   SPI.begin();
   
   mcp2515.reset();
   mcp2515.setBitrate(CAN_125KBPS);
-  mcp2515.setNormalMode();
-  
-  Serial.println("Example: Write to CAN");
+  mcp2515.setNormalMode(); 
 }
 
+/*************************************************************/
+/*            Module de Reintialisation du rucher            */
+/*************************************************************/
 void Reinitialiser(unsigned int *pu8_ID_CAN){
-  *pu8_ID_CAN=0;
-  b_Reinit=1;
+  /*Init value*/
+  *pu8_ID_CAN=0;  // Mise à "0" du CAN ID
+  b_Reinit=1;     // demande de Reinit
+  
+  /* body */
 }
 
-
+/*************************************************************/
+/*            Module de lecture de Trames CAN                */
+/*************************************************************/
 void Lecture_Can(unsigned int *pu8_ID_CAN)
 { 
+  /*Init value*/
+  
+  /* body */
   if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
-#ifdef DEBUG
-    Serial.print("Lecture CAN");   
+#ifdef DEBUG 
+    Serial.println("*********** Lecture CAN ***********"); 
     Serial.print(canMsg_Read.can_id, HEX); // print ID
     Serial.print(" "); 
     Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
@@ -69,20 +83,17 @@ void Lecture_Can(unsigned int *pu8_ID_CAN)
   Serial.print("Reinitialiser");   
 #endif
       }
-      /* Si l'ID emis supérieur à l'ID actuel, alors on incremente l'ID */
-      if (0 != canMsg_Read.data[K_POS_ID_CAN_FRAME])
-      {
+      /* Si l'ID emis supérieur à l'ID actuel, alors on incremente l'ID */ 
         if (*pu8_ID_CAN<canMsg_Read.data[K_POS_ID_CAN_FRAME])
         {
           *pu8_ID_CAN=canMsg_Read.data[K_POS_ID_CAN_FRAME]+1;
-          Serial.print("Incrementation u8_ID_CAN");  
-        }
         
 #ifdef DEBUG
-  Serial.print("*pu8_ID_CAN:");  
-  Serial.println(*pu8_ID_CAN, 1);
-#endif
-      }
+          Serial.print("Incrementation u8_ID_CAN");  
+          Serial.print("*pu8_ID_CAN:");  
+          Serial.println(*pu8_ID_CAN, 1);
+#endif 
+        }
     }
 
     Serial.println();      
@@ -94,7 +105,9 @@ void Lecture_Can(unsigned int *pu8_ID_CAN)
 /*************************************************************/
 void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN) 
 { 
+  /*Init value*/
   
+  /* body */
   canMsg_Write.can_id  = 0x0F6;
   canMsg_Write.can_dlc = 8;
   //memcpy(&canMsg_Write.data[0],&Poids,8);  
@@ -103,7 +116,7 @@ void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN)
  
 
 #ifdef DEBUG
-  Serial.print("Ecriture CAN");    
+  Serial.println("*********** Envoi CAN ***********"); 
   
   Serial.print("canMsg_Write.data[0]:");  
   Serial.println(canMsg_Write.data[0], 1); 
@@ -123,8 +136,10 @@ void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN)
 /*            Module d'envoi d'Initialisaion du Poids        */
 /*************************************************************/
 void Init_Poids()
-{ 
- 
+{  
+  /*Init value*/
+  
+  /* body */
   // parameter "gain" is ommited; the default value 128 is used by the library
   // HX711.DOUT  - pin #A1
   // HX711.PD_SCK - pin #A0
@@ -173,9 +188,12 @@ void Init_Poids()
 /*************************************************************/
 /*             Module de lecture du Poids                    */
 /*************************************************************/
-void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN) {
+void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN) 
+{
+  /*Init value*/
   float f_Poids=0;
   
+  /* body */
   f_Poids=scale.get_units(10);
 #ifdef DEBUG
   Serial.print("one reading:\t");
@@ -215,6 +233,10 @@ void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN) {
 /*                        setup                              */
 /*************************************************************/
 void setup() {
+  /*Init value*/
+  u8_ID_MAX=0;
+
+  /* body */
   Serial.begin(38400);
   Init_Poids();
   Init_Can(); 
@@ -224,9 +246,11 @@ void setup() {
 /*                            loop                           */
 /*************************************************************/
 void loop() {
+  /*Init value*/
   unsigned int u8_Poids_Moyen;
   static unsigned int u8_ID_CAN;
   
+  /* body */
   Lecture_Poids(&u8_Poids_Moyen,&u8_ID_CAN);
   Envoi_Can(u8_Poids_Moyen,u8_ID_CAN);
   Lecture_Can(&u8_ID_CAN);

@@ -29,32 +29,20 @@ void Init_Can()
 }
 
 
-void Envoi_Can(float f_Poids, char ID_CAN, char Reinit_Value) 
+void Envoi_Can(char ID_CAN, char Reinit_Value) 
 {
-Serial.print("Envoi_Can:"); 
-#ifdef DEBUG
-  Serial.print("f_Poids:");  
-  Serial.println(f_Poids, 1);
-#endif
+Serial.print("Envoi_Can:");  
   
   canMsg.can_id  = 0x0F6;
   canMsg.can_dlc = 8;
   //memcpy(&canMsg.data[0],&Poids,8);  
-  canMsg.data[0]=(char)f_Poids;
+  canMsg.data[0]=0;
   canMsg.data[K_POS_ID_CAN_FRAME]=(char)ID_CAN;
   canMsg.data[K_POS_REINIT_CAN_FRAME]=(char)Reinit_Value;
  
 
-#ifdef DEBUG
-  sprintf(buffer, "%d", (char)f_Poids); 
-  Serial.print("buffer:");  
-  Serial.print(buffer[0]);
-  Serial.print(buffer[1]);
-  Serial.print(buffer[2]);
-  Serial.print(buffer[3]);
-  Serial.print(buffer[4]);
-  Serial.print(buffer[5]);
-  
+#ifdef DEBUG   
+  Serial.println("*********** Envoi_Can ***********");
   Serial.print("canMsg.data[0]:");  
   Serial.println(canMsg.data[0], 1);
   Serial.print("canMsg.data[1]:");  
@@ -82,19 +70,19 @@ Serial.print("Envoi_Can:");
 }
 
 void Reinitalisation_Rucher(){
-  Envoi_Can(0,0,KEY_REINIT);
+  Envoi_Can(0,KEY_REINIT);
   Serial.println("Reinitalisation_Rucher");
 }
 
 void Simulation_PeseRuche_Test(){  
-  Envoi_Can(0,ID,0);
+  Envoi_Can(ID,0);
 }
 
 void Lecture_Can()
 { 
   if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
       
-Serial.print("Lecture_Can:"); 
+  Serial.println("*********** Lecture_Can ***********");
     Serial.print(canMsg.can_id, HEX); // print ID
     Serial.print(" "); 
     Serial.print(canMsg.can_dlc, HEX); // print DLC
@@ -119,4 +107,5 @@ void setup() {
 
 void loop() {
   Lecture_Can();
+  Simulation_PeseRuche_Test();
 }
