@@ -1,39 +1,74 @@
+
+/******************************************************************************/
+/* SOURCE : ModulePesee                                                         
+/******************************************************************************/
+/* DESCRIPTION  
+ *  
+ *  Ce module permet de peser une ruche et envoyer les données sur le CAN
+ *  
+/******************************************************************************/
+/* UTILISATION   
+ *  
+ *  A la premiere utilisation, l'utilisateur devra faire une demande de 
+ *  reinitialisation du rucher aprés avoir positionné tous les modules
+ *  Puis le positionnement de chaque ruche definira l'identifiant de la ruche
+ *  ex : premiere ruche posée => 1, deuxieme => 2, etc...
+ *  
+/******************************************************************************/
+/* HISTORIQUE
+ *    DATE        : 22/06/19
+ *    DESCRIPTIF  : Creation
+ *    AUTEUR      : SLO
+ *    VERSION     : 1.0
+ *     
+/******************************************************************************/
+
+/*--------------------------        INCLUDES         -------------------------*/
+
 #include "HX711.h"
 #include <SPI.h>
 #include <mcp2515.h>
 #include <math.h>
 
+/*--------------------------       DEFINITIONS       -------------------------*/
+
 #define DEBUG
-#define KEY_REINIT 0x55
-#define K_POS_ID_CAN_FRAME 7
-#define K_POS_REINIT_CAN_FRAME 6
-  
-static boolean b_Reinit=0;
-static unsigned int u8_ID_MAX;
-  
+
+
 /******************************************************************************/
 /*                             Interface CAN                                  */
 /*                                                                            */
 /* canMsg.data[K_POS_ID_CAN_FRAME] : 0x55 => Demande de reinitialisation      */
 /* canMsg.data[K_POS_REINIT_CAN_FRAME] : ID CAN                               */
 /******************************************************************************/
+#define KEY_REINIT 0x55
+#define K_POS_ID_CAN_FRAME 7
+#define K_POS_REINIT_CAN_FRAME 6
+  
+/*--------------------------          STATIC         -------------------------*/
 
-#ifdef DEBUG
-char buffer[8]; 
-#endif
-
+static boolean b_Reinit=0;
+static unsigned int u8_ID_MAX;
 HX711 scale;
 
 struct can_frame canMsg_Read; 
 struct can_frame canMsg_Write; 
 MCP2515 mcp2515(10);
-
+   
+#ifdef DEBUG
+char buffer[8]; 
+#endif 
 
 /*************************************************************/
 /*            Module d'initialisation du CAN                 */
 /*************************************************************/
 void Init_Can() 
 {   
+  /* Declarations */ 
+  
+  /*Init value*/
+  
+  /* Corps */
   SPI.begin();
   
   mcp2515.reset();
@@ -42,14 +77,17 @@ void Init_Can()
 }
 
 /*************************************************************/
-/*            Module de Reintialisation du rucher            */
+/*            Module de Reinitialisation du rucher           */
 /*************************************************************/
-void Reinitialiser(unsigned int *pu8_ID_CAN){
-  /*Init value*/
+void Reinitialiser(unsigned int *pu8_ID_CAN)
+{
+  /* Declarations */ 
+  
+  /* Init value */
   *pu8_ID_CAN=0;  // Mise à "0" du CAN ID
   b_Reinit=1;     // demande de Reinit
   
-  /* body */
+  /* Corps */
 }
 
 /*************************************************************/
@@ -57,9 +95,11 @@ void Reinitialiser(unsigned int *pu8_ID_CAN){
 /*************************************************************/
 void Lecture_Can(unsigned int *pu8_ID_CAN)
 { 
+  /* Declarations */ 
+  
   /*Init value*/
   
-  /* body */
+  /* Corps */
   if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
 #ifdef DEBUG 
     Serial.println("*********** Lecture CAN ***********"); 
@@ -105,9 +145,11 @@ void Lecture_Can(unsigned int *pu8_ID_CAN)
 /*************************************************************/
 void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN) 
 { 
+  /* Declarations */ 
+  
   /*Init value*/
   
-  /* body */
+  /* Corps */
   canMsg_Write.can_id  = 0x0F6;
   canMsg_Write.can_dlc = 8;
   //memcpy(&canMsg_Write.data[0],&Poids,8);  
@@ -137,9 +179,11 @@ void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN)
 /*************************************************************/
 void Init_Poids()
 {  
+  /* Declarations */ 
+  
   /*Init value*/
   
-  /* body */
+  /* Corps */
   // parameter "gain" is ommited; the default value 128 is used by the library
   // HX711.DOUT  - pin #A1
   // HX711.PD_SCK - pin #A0
@@ -190,10 +234,12 @@ void Init_Poids()
 /*************************************************************/
 void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN) 
 {
+  /* Declarations */ 
+  
   /*Init value*/
   float f_Poids=0;
   
-  /* body */
+  /* Corps */
   f_Poids=scale.get_units(10);
 #ifdef DEBUG
   Serial.print("one reading:\t");
@@ -232,11 +278,14 @@ void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN)
 /*************************************************************/
 /*                        setup                              */
 /*************************************************************/
-void setup() {
-  /*Init value*/
+void setup() 
+{
+  /* Declarations */ 
+  
+  /* Init value */
   u8_ID_MAX=0;
 
-  /* body */
+  /* Corps */
   Serial.begin(38400);
   Init_Poids();
   Init_Can(); 
@@ -245,12 +294,17 @@ void setup() {
 /*************************************************************/
 /*                            loop                           */
 /*************************************************************/
-void loop() {
-  /*Init value*/
+void loop() 
+{
+  /* Declarations */ 
   unsigned int u8_Poids_Moyen;
   static unsigned int u8_ID_CAN;
   
-  /* body */
+  /*Init value*/
+  u8_Poids_Moyen=0;
+  u8_ID_CAN=0;
+  
+  /* Corps */
   Lecture_Poids(&u8_Poids_Moyen,&u8_ID_CAN);
   Envoi_Can(u8_Poids_Moyen,u8_ID_CAN);
   Lecture_Can(&u8_ID_CAN);
