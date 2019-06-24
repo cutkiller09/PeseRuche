@@ -26,153 +26,34 @@
 /*--------------------------        INCLUDES         -------------------------*/
 
 #include "HX711.h"
-#include <SPI.h>
-#include <mcp2515.h>
+#include "Can.h"
+#include "types.h"
 #include <math.h>
 
 /*--------------------------       DEFINITIONS       -------------------------*/
 
-#define DEBUG
-
-
-/******************************************************************************/
-/*                             Interface CAN                                  */
-/*                                                                            */
-/* canMsg.data[K_POS_ID_CAN_FRAME] : 0x55 => Demande de reinitialisation      */
-/* canMsg.data[K_POS_REINIT_CAN_FRAME] : ID CAN                               */
-/******************************************************************************/
-#define KEY_REINIT 0x55
-#define K_POS_ID_CAN_FRAME 7
-#define K_POS_REINIT_CAN_FRAME 6
+#define DEBUG 
   
 /*--------------------------          STATIC         -------------------------*/
 
-static boolean b_Reinit=0;
-static unsigned int u8_ID_MAX;
-HX711 scale;
-
-struct can_frame canMsg_Read; 
-struct can_frame canMsg_Write; 
-MCP2515 mcp2515(10);
-   
-#ifdef DEBUG
-char buffer[8]; 
-#endif 
-
-/*************************************************************/
-/*            Module d'initialisation du CAN                 */
-/*************************************************************/
-void Init_Can() 
-{   
-  /* Declarations */ 
-  
-  /*Init value*/
-  
-  /* Corps */
-  SPI.begin();
-  
-  mcp2515.reset();
-  mcp2515.setBitrate(CAN_125KBPS);
-  mcp2515.setNormalMode(); 
-}
+static bool b_Reinit=false;
+static uint8 u8_ID_MAX;
+HX711 scale;  
+ 
 
 /*************************************************************/
 /*            Module de Reinitialisation du rucher           */
 /*************************************************************/
-void Reinitialiser(unsigned int *pu8_ID_CAN)
+void Reinitialiser(uint8 *pu8_ID_CAN)
 {
   /* Declarations */ 
   
   /* Init value */
   *pu8_ID_CAN=0;  // Mise à "0" du CAN ID
-  b_Reinit=1;     // demande de Reinit
+  b_Reinit=true;     // demande de Reinit
   
   /* Corps */
-}
-
-/*************************************************************/
-/*            Module de lecture de Trames CAN                */
-/*************************************************************/
-void Lecture_Can(unsigned int *pu8_ID_CAN)
-{ 
-  /* Declarations */ 
-  
-  /*Init value*/
-  
-  /* Corps */
-  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
-#ifdef DEBUG 
-    Serial.println("*********** Lecture CAN ***********"); 
-    Serial.print(canMsg_Read.can_id, HEX); // print ID
-    Serial.print(" "); 
-    Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
-    Serial.print(" ");
-#endif
-    
-    for (int i = 0; i<canMsg_Read.can_dlc; i++)  {  // print the data
-        
-      //Serial.print(canMsg_Read.data[i],HEX);
-      Serial.println(canMsg_Read.data[i], 1);
-      //Serial.print(" ");
-      /* Si demande de reinitialisation, alors tout reinitialiser */
-      if (KEY_REINIT == canMsg_Read.data[K_POS_REINIT_CAN_FRAME])
-      {
-        Serial.print("Reinitialiser");
-        Reinitialiser(pu8_ID_CAN);
-#ifdef DEBUG
-  Serial.print("Reinitialiser");   
-#endif
-      }
-      /* Si l'ID emis supérieur à l'ID actuel, alors on incremente l'ID */ 
-        if (*pu8_ID_CAN<canMsg_Read.data[K_POS_ID_CAN_FRAME])
-        {
-          *pu8_ID_CAN=canMsg_Read.data[K_POS_ID_CAN_FRAME]+1;
-        
-#ifdef DEBUG
-          Serial.print("Incrementation u8_ID_CAN");  
-          Serial.print("*pu8_ID_CAN:");  
-          Serial.println(*pu8_ID_CAN, 1);
-#endif 
-        }
-    }
-
-    Serial.println();      
-  }
-}
-
-/*************************************************************/
-/*            Module d'envoi de Trames CAN                   */
-/*************************************************************/
-void Envoi_Can(const unsigned int u8_Poids, const char ID_CAN) 
-{ 
-  /* Declarations */ 
-  
-  /*Init value*/
-  
-  /* Corps */
-  canMsg_Write.can_id  = 0x0F6;
-  canMsg_Write.can_dlc = 8;
-  //memcpy(&canMsg_Write.data[0],&Poids,8);  
-  canMsg_Write.data[0]=(char)u8_Poids;
-  canMsg_Write.data[K_POS_ID_CAN_FRAME]=ID_CAN;
- 
-
-#ifdef DEBUG
-  Serial.println("*********** Envoi CAN ***********"); 
-  
-  Serial.print("canMsg_Write.data[0]:");  
-  Serial.println(canMsg_Write.data[0], 1); 
-  Serial.print("canMsg_Write.data[K_POS_REINIT_CAN_FRAME]:");  
-  Serial.println(canMsg_Write.data[K_POS_REINIT_CAN_FRAME], 1);
-  Serial.print("canMsg_Write.data[K_POS_ID_CAN_FRAME]:");  
-  Serial.println(canMsg_Write.data[K_POS_ID_CAN_FRAME], 1); 
-#endif 
-  
-  mcp2515.sendMessage(&canMsg_Write);  
-  
-  delay(100);
-
-}
+} 
 
 /*************************************************************/
 /*            Module d'envoi d'Initialisaion du Poids        */
@@ -232,7 +113,7 @@ void Init_Poids()
 /*************************************************************/
 /*             Module de lecture du Poids                    */
 /*************************************************************/
-void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN) 
+void Lecture_Poids(uint8 *pu8_Poids,uint8 *pu8_ID_CAN) 
 {
   /* Declarations */ 
   
@@ -261,11 +142,11 @@ void Lecture_Poids(unsigned int *pu8_Poids,unsigned int *pu8_ID_CAN)
   Serial.println(*pu8_Poids, 1);
 #endif
 
-  /* Si Demande de Reinit et Poids supérieur à 0 */
-  if ((*pu8_Poids > 5)&&(b_Reinit != 0))
+  /* Si Demande de Reinit et Poids supérieur à 5 */
+  if ((*pu8_Poids > 5)&&(b_Reinit != false))
   {
     *pu8_ID_CAN++;
-    b_Reinit=0;
+    b_Reinit=false;
     Serial.print("Incrementation CAN ID");    
   }
 
@@ -297,8 +178,9 @@ void setup()
 void loop() 
 {
   /* Declarations */ 
-  unsigned int u8_Poids_Moyen;
-  static unsigned int u8_ID_CAN;
+  uint8 u8_Poids_Moyen;
+  static uint8 u8_ID_CAN;
+  bool b_Demande_Reinit=false; 
   
   /*Init value*/
   u8_Poids_Moyen=0;
@@ -307,5 +189,11 @@ void loop()
   /* Corps */
   Lecture_Poids(&u8_Poids_Moyen,&u8_ID_CAN);
   Envoi_Can(u8_Poids_Moyen,u8_ID_CAN);
-  Lecture_Can(&u8_ID_CAN);
+  Lecture_Can(&u8_ID_CAN,&b_Demande_Reinit);
+
+  /* Si demande de reinitialisation demandee */
+  if (false != b_Demande_Reinit)
+  {
+        Reinitialiser(&u8_ID_CAN);    
+  }
 }
