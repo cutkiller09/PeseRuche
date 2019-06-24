@@ -20,12 +20,17 @@
 /******************************************************************************/
 
 /*--------------------------        INCLUDES         -------------------------*/ 
-#include "HX711.h"
-#include <SPI.h>
+
 #include "types.h"
 #include <mcp2515.h> 
 
 /*--------------------------       DEFINITIONS       -------------------------*/ 
+typedef struct
+{
+  uint16 u16_Can_Id;
+  uint8  u8_Poids; 
+  bool  b_Demande_Reinit;   
+} ts_trame_can;
 
 /******************************************************************************/
 /*                             Interface CAN                                  */
@@ -36,8 +41,9 @@
 #define KEY_REINIT 0x55
 #define K_POS_ID_CAN_FRAME 7
 #define K_POS_REINIT_CAN_FRAME 6
+#define K_POS_POIDS_CAN_FRAME 0
    
 void Init_Can() ; 
-void Lecture_Can(uint8 *pu8_ID_CAN,bool *pb_Demande_Reinit);
-void Envoi_Can(const uint8 u8_Poids, const uint8 u8_ID_CAN); 
+void Lecture_Can(ts_trame_can *ps_trame_can);
+void Envoi_Can(ts_trame_can s_trame_can); 
  

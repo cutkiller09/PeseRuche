@@ -35,9 +35,11 @@
 /* canMsg.data[K_POS_ID_CAN_FRAME] : 0x55 => Demande de reinitialisation      */
 /* canMsg.data[K_POS_REINIT_CAN_FRAME] : ID CAN                               */
 /******************************************************************************/
-#define KEY_REINIT 0x55
-#define K_POS_ID_CAN_FRAME 7
-#define K_POS_REINIT_CAN_FRAME 6
+#define KEY_REINIT                0x55
+#define K_POS_ID_CAN_FRAME        7
+#define K_POS_REINIT_CAN_FRAME    6
+#define K_STANDARD_FRAME_FORMAT   0x0F6
+#define K_DLC                     8
   
 /*--------------------------          STATIC         -------------------------*/ 
 struct can_frame canMsg_Read; 
@@ -68,66 +70,58 @@ void Init_Can()
 /*************************************************************/
 /*            Module de lecture de Trames CAN                */
 /*************************************************************/
-void Lecture_Can(uint8 *pu8_ID_CAN,bool *pb_Demande_Reinit)
+void Lecture_Can(ts_trame_can *ps_trame_can)
 { 
   /* Declarations */ 
   
   /*Init value*/
   
   /* Corps */
-  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
+  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK)
+  {
+    
+      /* Si demande de reinitialisation, alors tout reinitialiser */
+      ps_trame_can->b_Demande_Reinit= canMsg_Read.data[K_POS_REINIT_CAN_FRAME];
+      ps_trame_can->u16_Can_Id=canMsg_Read.data[K_POS_ID_CAN_FRAME];
+      
 #ifdef DEBUG 
     Serial.println("*********** Lecture CAN ***********"); 
     Serial.print(canMsg_Read.can_id, HEX); // print ID
     Serial.print(" "); 
     Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
     Serial.print(" ");
-#endif
     
-    for (int i = 0; i<canMsg_Read.can_dlc; i++)  {  // print the data
+    for (int i = 0; i<canMsg_Read.can_dlc; i++)  
+    {  // print the data
         
       //Serial.print(canMsg_Read.data[i],HEX);
       Serial.println(canMsg_Read.data[i], 1);
-      //Serial.print(" ");
-      /* Si demande de reinitialisation, alors tout reinitialiser */
-      if (KEY_REINIT == canMsg_Read.data[K_POS_REINIT_CAN_FRAME])
-      { 
-        *pb_Demande_Reinit=true; 
-      }
-      /* Si l'ID emis supérieur à l'ID actuel, alors on incremente l'ID */ 
-        if (*pu8_ID_CAN<canMsg_Read.data[K_POS_ID_CAN_FRAME])
-        {
-          *pu8_ID_CAN=canMsg_Read.data[K_POS_ID_CAN_FRAME]+1;
-        
-#ifdef DEBUG
-          Serial.print("Incrementation u8_ID_CAN");  
-          Serial.print("*pu8_ID_CAN:");  
-          Serial.println(*pu8_ID_CAN, 1);
-#endif 
-        }
+      //Serial.print(" "); 
+  
     }
 
     Serial.println();      
+#endif
   }
 }
 
 /*************************************************************/
 /*            Module d'envoi de Trames CAN                   */
 /*************************************************************/
-void Envoi_Can(const uint8 u8_Poids, const uint8 u8_ID_CAN)
+void Envoi_Can(ts_trame_can s_trame_can)
 { 
   /* Declarations */ 
   
   /*Init value*/
   
   /* Corps */
-  canMsg_Write.can_id  = 0x0F6;
-  canMsg_Write.can_dlc = 8;
+  canMsg_Write.can_id  = K_STANDARD_FRAME_FORMAT;
+  canMsg_Write.can_dlc = K_DLC;
   //memcpy(&canMsg_Write.data[0],&Poids,8);  
-  canMsg_Write.data[0]=(char)u8_Poids;
-  canMsg_Write.data[K_POS_ID_CAN_FRAME]=u8_ID_CAN;
- 
-
+  canMsg_Write.data[K_POS_POIDS_CAN_FRAME]=(char)s_trame_can.u8_Poids;
+  canMsg_Write.data[K_POS_ID_CAN_FRAME]=s_trame_can.u16_Can_Id;
+  canMsg_Write.data[K_POS_ID_CAN_FRAME]=s_trame_can.b_Demande_Reinit;
+  
 #ifdef DEBUG
   Serial.println("*********** Envoi CAN ***********"); 
   

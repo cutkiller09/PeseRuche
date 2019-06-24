@@ -25,8 +25,8 @@
 
 /*--------------------------        INCLUDES         -------------------------*/
 
-#include "HX711.h"
 #include "Can.h"
+#include "Poids.h"
 #include "types.h"
 #include <math.h>
 
@@ -35,126 +35,52 @@
 #define DEBUG 
   
 /*--------------------------          STATIC         -------------------------*/
-
-static bool b_Reinit=false;
-static uint8 u8_ID_MAX;
-HX711 scale;  
+static uint8 u8_CAN_ID_MAX;
+static ts_trame_can s_trame_can_emise;
+static ts_trame_can s_trame_can_recue;
  
 
 /*************************************************************/
 /*            Module de Reinitialisation du rucher           */
 /*************************************************************/
-void Reinitialiser(uint8 *pu8_ID_CAN)
+void Gerer_Reinitialisation(ts_trame_can s_trame_can_recue,ts_trame_can *ps_trame_can_emise)
 {
   /* Declarations */ 
+  static bool b_Raz_Id=false;
   
   /* Init value */
-  *pu8_ID_CAN=0;  // Mise à "0" du CAN ID
-  b_Reinit=true;     // demande de Reinit
+  
+  /* Si demande de reinitialisation du CAN-ID recu par l'utilisateur */
+  if (false != s_trame_can_recue.b_Demande_Reinit)
+  {
+    ps_trame_can_emise->u16_Can_Id=0; // Mise à "0" du CAN ID
+    b_Raz_Id=true;                    // demande de Reinit
+    u8_CAN_ID_MAX=1;
+  }
+  
+  /* Si le CAN ID recu d'une trame est superieur a notre CAN-ID                           */
+  /* Alors cela veut dire qu'une ruche a deja doné son ID et que nous avons l'ID suivant  */
+  if (u8_CAN_ID_MAX<s_trame_can_recue.u16_Can_Id)
+      {
+        u8_CAN_ID_MAX=s_trame_can_recue.u16_Can_Id+1;
+      
+#ifdef DEBUG
+        Serial.print("Incrementation u8_CAN_ID_MAX");  
+        Serial.print("u8_CAN_ID_MAX:");  
+        Serial.println(u8_CAN_ID_MAX, 1);
+#endif 
+      }
+   
+  /* Si Demande de Reinit et Poids supérieur à 5 */
+  if ((ps_trame_can_emise->u8_Poids > 5)&&(b_Raz_Id != false))
+  {
+    ps_trame_can_emise->u16_Can_Id=u8_CAN_ID_MAX;
+    b_Raz_Id=false;
+    Serial.print("Mise à jour du CAN ID");    
+  }
   
   /* Corps */
 } 
-
-/*************************************************************/
-/*            Module d'envoi d'Initialisaion du Poids        */
-/*************************************************************/
-void Init_Poids()
-{  
-  /* Declarations */ 
-  
-  /*Init value*/
-  
-  /* Corps */
-  // parameter "gain" is ommited; the default value 128 is used by the library
-  // HX711.DOUT  - pin #A1
-  // HX711.PD_SCK - pin #A0
-  scale.begin(A1, A0);
-
-#ifdef DEBUG
-  Serial.println("Before setting up the scale:");
-  Serial.print("read: \t\t");
-  Serial.println(scale.read());     // print a raw reading from the ADC
-
-  Serial.print("read average: \t\t");
-  Serial.println(scale.read_average(20));   // print the average of 20 readings from the ADC
-
-  Serial.print("get value: \t\t");
-  Serial.println(scale.get_value(5));   // print the average of 5 readings from the ADC minus the tare weight (not set yet)
-
-  Serial.print("get units: \t\t");
-  Serial.println(scale.get_units(5), 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided
-            // by the SCALE parameter (not set yet)
-#endif
-
-  scale.set_scale(2280.f);                      // this value is obtained by calibrating the scale with known weights; see the README for details
-  scale.tare();               // reset the scale to 0
-
-#ifdef DEBUG
-  Serial.println("After setting up the scale:");
-
-  Serial.print("read: \t\t");
-  Serial.println(scale.read());                 // print a raw reading from the ADC
-
-  Serial.print("read average: \t\t");
-  Serial.println(scale.read_average(20));       // print the average of 20 readings from the ADC
-
-  Serial.print("get value: \t\t");
-  Serial.println(scale.get_value(5));   // print the average of 5 readings from the ADC minus the tare weight, set with tare()
-
-  Serial.print("get units: \t\t");
-  Serial.println(scale.get_units(5), 1);        // print the average of 5 readings from the ADC minus tare weight, divided
-            // by the SCALE parameter set with set_scale
-
-  Serial.println("Readings:");  
-#endif
-}  
-
-
-/*************************************************************/
-/*             Module de lecture du Poids                    */
-/*************************************************************/
-void Lecture_Poids(uint8 *pu8_Poids,uint8 *pu8_ID_CAN) 
-{
-  /* Declarations */ 
-  
-  /*Init value*/
-  float f_Poids=0;
-  
-  /* Corps */
-  f_Poids=scale.get_units(10);
-#ifdef DEBUG
-  Serial.print("one reading:\t");
-  Serial.print(scale.get_units(), 1);
-  Serial.print("\t| average:\t");
-  Serial.println(f_Poids, 1);
-#endif
-  if (f_Poids>0)
-  {
-    *pu8_Poids=(unsigned char)f_Poids;
-  }
-  else
-  {
-    *pu8_Poids=0;
-  }
-  
-#ifdef DEBUG
-  Serial.print("*pu8_Poids:");  
-  Serial.println(*pu8_Poids, 1);
-#endif
-
-  /* Si Demande de Reinit et Poids supérieur à 5 */
-  if ((*pu8_Poids > 5)&&(b_Reinit != false))
-  {
-    *pu8_ID_CAN++;
-    b_Reinit=false;
-    Serial.print("Incrementation CAN ID");    
-  }
-
-  scale.power_down();             // put the ADC in sleep mode
-  delay(5000);
-  scale.power_up();
-}
-
 
 /*************************************************************/
 /*                        setup                              */
@@ -164,7 +90,15 @@ void setup()
   /* Declarations */ 
   
   /* Init value */
-  u8_ID_MAX=0;
+  u8_CAN_ID_MAX=0;
+  
+  s_trame_can_emise.u16_Can_Id=0;
+  s_trame_can_emise.u8_Poids=0;
+  s_trame_can_emise.b_Demande_Reinit=false;
+  
+  s_trame_can_recue.u16_Can_Id=0;
+  s_trame_can_recue.u8_Poids=0;
+  s_trame_can_recue.b_Demande_Reinit=false;
 
   /* Corps */
   Serial.begin(38400);
@@ -178,22 +112,15 @@ void setup()
 void loop() 
 {
   /* Declarations */ 
-  uint8 u8_Poids_Moyen;
-  static uint8 u8_ID_CAN;
+  uint8 u8_Poids_Moyen; 
   bool b_Demande_Reinit=false; 
   
-  /*Init value*/
-  u8_Poids_Moyen=0;
-  u8_ID_CAN=0;
+  /*Init value*/ 
   
   /* Corps */
-  Lecture_Poids(&u8_Poids_Moyen,&u8_ID_CAN);
-  Envoi_Can(u8_Poids_Moyen,u8_ID_CAN);
-  Lecture_Can(&u8_ID_CAN,&b_Demande_Reinit);
+  Lecture_Poids(&s_trame_can_emise.u8_Poids);
 
-  /* Si demande de reinitialisation demandee */
-  if (false != b_Demande_Reinit)
-  {
-        Reinitialiser(&u8_ID_CAN);    
-  }
+  Envoi_Can(s_trame_can_emise);
+  Lecture_Can(&s_trame_can_recue);
+  Gerer_Reinitialisation(s_trame_can_recue,&s_trame_can_emise); 
 }
