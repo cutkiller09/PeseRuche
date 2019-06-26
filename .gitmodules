@@ -1,0 +1,3 @@
+[submodule "02_Logiciel/Arduino-CMake-NG"]
+	path = 02_Logiciel/Arduino-CMake-NG
+	url = https://github.com/cutkiller09/Arduino-CMake-NG.git
