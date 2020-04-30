@@ -1,0 +1,3 @@
+[submodule "sim800l-evb"]
+	path = sim800l-evb
+	url = https://github.com/Yoimer/sim800l-evb.git

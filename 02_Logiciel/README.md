@@ -36,3 +36,18 @@ Pour cela les étapes suivantes devront être suivies
 5. Chaque ruche sera positionnée à son emplacement définitif en commencant par l'emplacement numéro #1 jusqu'à l'emplacement définitif. 
 
 
+## 2. Configuration
+
+## 2. How to calibrate your load cell
+
+    Call set_scale() with no parameter.
+    Call tare() with no parameter.
+    Place a known weight on the scale and call get_units(10).
+    Divide the result in step 3 to your known weight. You should get about the parameter you need to pass to set_scale().
+    Adjust the parameter in step 4 until you get an accurate reading.
+
+
+            Poids reel      Hx711
+rien        0 kg            -38
+Baptiste : 19.4 kg          -830000
+Nonore : 13.5 kg            
