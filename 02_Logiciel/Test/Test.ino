@@ -53,7 +53,7 @@ const unsigned long postingInterval = 15000L; // delay between updates, in milli
 /*************************************************************/
 //Create software serial object to communicate with SIM800
 SoftwareSerial serialSIM800(SIM800_TX_PIN,SIM800_RX_PIN);
- 
+// 
 //void Send_Sms() {
 //  String SIM_PIN_CODE = String( "1234" );
 //  serialSIM800.print("AT+CPIN=");
@@ -146,10 +146,6 @@ void power_on()
   uint8_t answer = 0;
 
   Serial.println("On Power_on...");
-  String SIM_PIN_CODE = String( "1234" );
-  serialSIM800.print("AT+CPIN=");
-  serialSIM800.println( SIM_PIN_CODE );
-  Serial.println("Setup OK");
 
   // checks if the module is started
   answer = sendATcommand("AT\r\n", "OK\r\n", TIMEOUT);
@@ -175,51 +171,51 @@ void power_on()
   }
 }
 
-///*************************************************************/
-///*                    restartPhoneActivity                   */
-///*************************************************************/
-//void restartPhoneActivity()
-//{
-//	do
-//	{
-//		sendATcommand("AT+CFUN=0\r\n", "OK\r\n", TIMEOUT);
-//		delay(2000);
-//		answer = sendATcommand("AT+CFUN=1\r\n", "Call Ready\r\n", TIMEOUT);
-//	}while(answer == 0);
-//}
-//
-///*************************************************************/
-///*                    connectToNetwork                       */
-///*************************************************************/
-//void connectToNetwork()
-//{
-//	sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"\r\n", "OK\r\n", TIMEOUT);//sets Contype
-//	snprintf(aux_str, sizeof(aux_str), "AT+SAPBR=3,1,\"APN\",\"%s\"\r\n", apn);//sets APN
-//	sendATcommand(aux_str, "OK\r\n", TIMEOUT);
-//	attempts = 0;//tries 3 times or gets on the loop until sendATcommand != 0
-//	while (sendATcommand("AT+SAPBR=1,1\r\n", "OK\r\n", TIMEOUT) == 0)
-//    {
-//		delay(5000);
-//		attempts = attempts + 1;
-//		if(attempts > 2)
-//		{
-//			restartPhoneActivity();
-//			attempts = 0;
-//		}
-//    } 
-//}
-//
-///*************************************************************/
-///*                    initHTTPSession                        */
-///*************************************************************/
-//void initHTTPSession()
-//{
-//	while (sendATcommand("AT+HTTPINIT\r\n", "OK\r\n", TIMEOUT) == 0)
-//    {
-//		restartPhoneActivity();
-//		connectToNetwork();
-//   }
-//}
+/*************************************************************/
+/*                    restartPhoneActivity                   */
+/*************************************************************/
+void restartPhoneActivity()
+{
+	do
+	{
+		sendATcommand("AT+CFUN=0\r\n", "OK\r\n", TIMEOUT);
+		delay(2000);
+		answer = sendATcommand("AT+CFUN=1\r\n", "Call Ready\r\n", TIMEOUT);
+	}while(answer == 0);
+}
+
+/*************************************************************/
+/*                    connectToNetwork                       */
+/*************************************************************/
+void connectToNetwork()
+{
+	sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"\r\n", "OK\r\n", TIMEOUT);//sets Contype
+	snprintf(aux_str, sizeof(aux_str), "AT+SAPBR=3,1,\"APN\",\"%s\"\r\n", apn);//sets APN
+	sendATcommand(aux_str, "OK\r\n", TIMEOUT);
+	attempts = 0;//tries 3 times or gets on the loop until sendATcommand != 0
+	while (sendATcommand("AT+SAPBR=1,1\r\n", "OK\r\n", TIMEOUT) == 0)
+    {
+		delay(5000);
+		attempts = attempts + 1;
+		if(attempts > 2)
+		{
+			restartPhoneActivity();
+			attempts = 0;
+		}
+    } 
+}
+
+/*************************************************************/
+/*                    initHTTPSession                        */
+/*************************************************************/
+void initHTTPSession()
+{
+	while (sendATcommand("AT+HTTPINIT\r\n", "OK\r\n", TIMEOUT) == 0)
+    {
+		restartPhoneActivity();
+		connectToNetwork();
+   }
+}
 //
 ///*************************************************************/
 ///*                    HTTPRequest                            */
@@ -262,99 +258,99 @@ void power_on()
 //}
 ///////////////////////////////////////////////////////////////
 
+
+/////////////////////////////////////////////////////////////// 
+//                 MPC5125    CAN Library                    //
+/////////////////////////////////////////////////////////////// 
+/*************************************************************/
+/*            Module d'initialisation du CAN                 */
+/*************************************************************/
+void Init_Can()
+{
+  SPI.begin();
+
+  mcp2515.reset();
+  mcp2515.setBitrate(CAN_125KBPS);
+  mcp2515.setNormalMode();
+} 
+
+void Envoi_Can(char ID_CAN, char Reinit_Value)
+{
+  Serial.print("Envoi_Can:");
+
+  canMsg.can_id  = 0x0F6;
+  canMsg.can_dlc = 8;
+  //memcpy(&canMsg.data[0],&Poids,8);
+  canMsg.data[0] = 0;
+  canMsg.data[K_POS_ID_CAN_FRAME] = (char)ID_CAN;
+  canMsg.data[K_POS_REINIT_CAN_FRAME] = (char)Reinit_Value;
+
+
+//#ifdef DEBUG
+//  Serial.println("*********** Envoi_Can ***********");
+//  Serial.print("canMsg.data[0]:");
+//  Serial.println(canMsg.data[0], 1);
+//  Serial.print("canMsg.data[1]:");
+//  Serial.println(canMsg.data[1], 1);
+//  Serial.print("canMsg.data[2]:");
+//  Serial.println(canMsg.data[2], 1);
+//  Serial.print("canMsg.data[3]:");
+//  Serial.println(canMsg.data[3], 1);
+//  Serial.print("canMsg.data[4]:");
+//  Serial.println(canMsg.data[4], 1);
+//  Serial.print("canMsg.data[5]:");
+//  Serial.println(canMsg.data[5], 1);
+//  Serial.print("canMsg.data[6]:");
+//  Serial.println(canMsg.data[6], 1);
+//  Serial.print("canMsg.data[7]:");
+//  Serial.println(canMsg.data[7], 1);
+//#endif
+
+  mcp2515.sendMessage(&canMsg);
+
+  Serial.println("Messages sent");
+
+  delay(100);
+
+}
+
+void Reinitalisation_Rucher() {
+  Envoi_Can(0, KEY_REINIT);
+  Serial.println("Reinitalisation_Rucher");
+} 
+
+/*************************************************************/
+/*            Module de lecture de Trames CAN                */
+/*************************************************************/
+void Lecture_Can(float *f_poids_ruche)
+{
+  /*Init value*/ 
+
+  /* body */
+  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
+//#ifdef DEBUG
+//    Serial.println("*********** Lecture CAN ***********");
+//    Serial.print(canMsg_Read.can_id, HEX); // print ID
+//    Serial.print(" ");
+//    Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
+//    Serial.print(" ");
+//#endif
+
+//    for (int i = 0; i < canMsg_Read.can_dlc; i++)  { // print the data
 //
-///////////////////////////////////////////////////////////////// 
-////                 MPC5125    CAN Library                    //
-///////////////////////////////////////////////////////////////// 
-///*************************************************************/
-///*            Module d'initialisation du CAN                 */
-///*************************************************************/
-//void Init_Can()
-//{
-//  SPI.begin();
-//
-//  mcp2515.reset();
-//  mcp2515.setBitrate(CAN_125KBPS);
-//  mcp2515.setNormalMode();
-//} 
-//
-//void Envoi_Can(char ID_CAN, char Reinit_Value)
-//{
-//  Serial.print("Envoi_Can:");
-//
-//  canMsg.can_id  = 0x0F6;
-//  canMsg.can_dlc = 8;
-//  //memcpy(&canMsg.data[0],&Poids,8);
-//  canMsg.data[0] = 0;
-//  canMsg.data[K_POS_ID_CAN_FRAME] = (char)ID_CAN;
-//  canMsg.data[K_POS_REINIT_CAN_FRAME] = (char)Reinit_Value;
-//
-//
-////#ifdef DEBUG
-////  Serial.println("*********** Envoi_Can ***********");
-////  Serial.print("canMsg.data[0]:");
-////  Serial.println(canMsg.data[0], 1);
-////  Serial.print("canMsg.data[1]:");
-////  Serial.println(canMsg.data[1], 1);
-////  Serial.print("canMsg.data[2]:");
-////  Serial.println(canMsg.data[2], 1);
-////  Serial.print("canMsg.data[3]:");
-////  Serial.println(canMsg.data[3], 1);
-////  Serial.print("canMsg.data[4]:");
-////  Serial.println(canMsg.data[4], 1);
-////  Serial.print("canMsg.data[5]:");
-////  Serial.println(canMsg.data[5], 1);
-////  Serial.print("canMsg.data[6]:");
-////  Serial.println(canMsg.data[6], 1);
-////  Serial.print("canMsg.data[7]:");
-////  Serial.println(canMsg.data[7], 1);
-////#endif
-//
-//  mcp2515.sendMessage(&canMsg);
-//
-//  Serial.println("Messages sent");
-//
-//  delay(100);
-//
-//}
-//
-//void Reinitalisation_Rucher() {
-//  Envoi_Can(0, KEY_REINIT);
-//  Serial.println("Reinitalisation_Rucher");
-//} 
-//
-///*************************************************************/
-///*            Module de lecture de Trames CAN                */
-///*************************************************************/
-//void Lecture_Can(float *f_poids_ruche)
-//{
-//  /*Init value*/ 
-//
-//  /* body */
-//  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
-////#ifdef DEBUG
-////    Serial.println("*********** Lecture CAN ***********");
-////    Serial.print(canMsg_Read.can_id, HEX); // print ID
-////    Serial.print(" ");
-////    Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
-////    Serial.print(" ");
-////#endif
-//
-////    for (int i = 0; i < canMsg_Read.can_dlc; i++)  { // print the data
-////
-////      //Serial.print(canMsg_Read.data[i],HEX);
-////      Serial.println(canMsg_Read.data[i], 1);
-////      //Serial.print(" "); 
-////    } 
-//
-//    *f_poids_ruche = canMsg_Read.data[0] *1000 + canMsg_Read.data[1]*10;  // u8_Poids_high *1000 + u8_Poids_low*10;
-//    *f_poids_ruche = *f_poids_ruche / 1000;
-//    
-////    Serial.print("*f_poids_ruche:");
-////    Serial.println(*f_poids_ruche, 1);
-//
-//  }
-//}
+//      //Serial.print(canMsg_Read.data[i],HEX);
+//      Serial.println(canMsg_Read.data[i], 1);
+//      //Serial.print(" "); 
+//    } 
+
+    *f_poids_ruche = canMsg_Read.data[0] *1000 + canMsg_Read.data[1]*10;  // u8_Poids_high *1000 + u8_Poids_low*10;
+    *f_poids_ruche = *f_poids_ruche / 1000;
+    
+//    Serial.print("*f_poids_ruche:");
+//    Serial.println(*f_poids_ruche, 1);
+
+  }
+}
 //
 //
 ///*************************************************************/
@@ -408,8 +404,6 @@ void power_on()
 /*                        setup                              */
 /*************************************************************/
 void setup() {
-  unsigned int answer=0;
-  
   /* body */
   //pinMode(onModulePin, OUTPUT);
 
@@ -420,22 +414,7 @@ void setup() {
   serialSIM800.begin(9600);
   delay(1000);
   
- // Init_Can();
-
-//  while (1) {  
-//    Send_Sms();
-//    
-//    String SIM_PIN_CODE = String( "1234" );
-//    serialSIM800.print("AT+CPIN=");
-//    serialSIM800.println( SIM_PIN_CODE );
-//  
-//    serialSIM800.print("AT");
-//    serialSIM800.print("AT+CSCLK=0");
-//    serialSIM800.print("AT+CFUN=1");
-//    serialSIM800.print("AT");
-//  }
-
-  
+  Init_Can();
   //Reinitalisation_Rucher();
   String SIM_PIN_CODE = String( "1234" );
   serialSIM800.print("AT+CPIN=");
@@ -444,55 +423,11 @@ void setup() {
    
   Serial.println("Starting...");
   
-  //power_on();
+  power_on();
 
   delay(3000);
-//
-//  serialSIM800.print("AT");
-//  serialSIM800.print("AT+CSCLK=0");
-//  serialSIM800.print("AT+CFUN=1");
-//  serialSIM800.print("AT");
-
-
-//  Test
   
-  answer = sendATcommand("AT\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  }
-      delay(100);
-  
-  answer = sendATcommand("AT+CSCLK=0\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  }
-      delay(100);
-  
-  answer = sendATcommand("AT+CFUN=1\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  } 
-      delay(4000); 
-
-//  HTTPRequest(1, 5.5);
-  
-  
-  Serial.println("AT+HTTPPARA=\"URL\",\"www.castillolk.com.ve/WhiteList.txt\"\r\n");
+  //Serial.println("AT+HTTPPARA=\"URL\",\"www.castillolk.com.ve/WhiteList.txt\"\r\n");
   
   while( (sendATcommand("AT+CREG?\r\n", "+CREG: 0,1\r\n", 500) || 
             sendATcommand("AT+CREG?\r\n", "+CREG: 0,5\r\n", 500)) == 0 );
@@ -500,9 +435,9 @@ void setup() {
   /* sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"\r\n", "OK\r\n", TIMEOUT);//sets Contype
   snprintf(aux_str, sizeof(aux_str), "AT+SAPBR=3,1,\"APN\",\"%s\"\r\n", apn);//sets APN
   sendATcommand(aux_str, "OK\r\n", TIMEOUT); */
-//  
-// connectToNetwork();
-// initHTTPSession(); 
+  
+  connectToNetwork();
+  initHTTPSession(); 
 }
 
 
@@ -511,10 +446,10 @@ void setup() {
 /*************************************************************/
 void loop() {
   float f_poids;
-//  
-//  Lecture_Can(&f_poids);
-//   Serial.print("f_poids:");
-//   Serial.println(f_poids, 1);
+  
+  Lecture_Can(&f_poids);
+   Serial.print("f_poids:");
+   Serial.println(f_poids, 1);
   //Envoi_Can(69, 51);
   //Simulation_PeseRuche_Test();
   
