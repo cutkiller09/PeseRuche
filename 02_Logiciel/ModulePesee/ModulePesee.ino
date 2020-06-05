@@ -2,14 +2,87 @@
 #include <SPI.h>
 #include <mcp2515.h>
 #include <math.h>
-
+//Optimisation de la consommation
+#include <avr/power.h>
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+volatile int f_wdt=1;
+volatile int u16_cpt_attente=0;
+#define K_MAX_ATTENTE 20 // attente de K_MAX_ATTENTE fois 8 secondes
 #define DEBUG
 #define KEY_REINIT 0x55
+#define K_RUCHE_ID_CAN_FRAME 1
 #define K_POS_ID_CAN_FRAME 7
 #define K_POS_REINIT_CAN_FRAME 6
+#define K_SERIAL 38400  // vitesse du port série en bauds
+
+#define K_OFFSET_A_VIDE 0 // 86 Offset à vide
+#define K_POIDS_BRUTE (470668-K_OFFSET_A_VIDE) // valeur brute lue pour la valeur de reference donnee (ici 10kg)
+#define K_POIDS_REFERENCE 11200 //11.2 kg 
 
 static boolean b_Reinit = 0;
 static unsigned int u8_ID_MAX;
+
+void setup_watchdog(int ii) ;
+
+
+// Watchdog Interrupt Service est exécité lors d'un timeout du WDT
+ISR(WDT_vect) {
+  u16_cpt_attente++;
+  if (u16_cpt_attente>=K_MAX_ATTENTE)
+  {  
+    u16_cpt_attente=0;
+    if(f_wdt == 0) {
+     f_wdt = 1; // flag global 
+     }
+  }
+  else
+  {
+    ;
+  }
+}
+
+
+/******************************************************************************/
+/*                             SLEEP MODE                            */ 
+/******************************************************************************/
+
+/*************************************************************/
+/*                      SETUP WATCHDOG                       */
+/*************************************************************/
+// paramètre : 0=16ms, 1=32ms, 2=64ms, 3=128ms, 4=250ms, 5=500ms, 6=1 sec,7=2 sec, 8=4 sec, 9=8 sec
+void setup_watchdog(int ii) 
+{
+ byte bb;
+ int ww;
+ if (ii > 9 ) ii=9;
+ bb=ii & 7;
+ if (ii > 7) bb|= (1<<5);
+ bb|= (1<<WDCE);
+ ww=bb;
+ // Clear the reset flag
+ MCUSR &= ~(1<<WDRF);
+ // start timed sequence
+ WDTCSR |= (1<<WDCE) | (1<<WDE);
+ // set new watchdog timeout value
+ WDTCSR = bb;
+ WDTCSR |= _BV(WDIE);
+}
+
+/*************************************************************/
+/*                      ENTER SLEEP                          */
+/*************************************************************/
+void enterSleep(void) {
+ set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+ sleep_enable();
+ sleep_mode(); //Entre dans le mode veille choisi
+
+// Le programme va reprendre ici après le timeout du WDT
+
+ sleep_disable(); // La 1ère chose à faire est de désactiver le mode veille
+}
+
+
 
 /******************************************************************************/
 /*                             Interface CAN                                  */
@@ -24,6 +97,8 @@ char buffer[8];
 
 HX711 scale;
 
+unsigned int u16_i=0;
+float array_raw_value[10];
 struct can_frame canMsg_Read;
 struct can_frame canMsg_Write;
 MCP2515 mcp2515(10);
@@ -40,6 +115,7 @@ void Init_Can()
   mcp2515.setBitrate(CAN_125KBPS);
   mcp2515.setNormalMode();
 }
+
 
 /*************************************************************/
 /*            Module de Reintialisation du rucher            */
@@ -202,6 +278,8 @@ void Lecture_Poids(unsigned int *pu8_Poids_high,unsigned int *pu8_Poids_low, uns
 {
   /*Init value*/
   unsigned int u16_Poids = 0;
+  unsigned char i;
+  float average_raw_value=0;
   float masse;
   float masse_kg;
   float raw_value;
@@ -209,13 +287,24 @@ void Lecture_Poids(unsigned int *pu8_Poids_high,unsigned int *pu8_Poids_low, uns
   /* body */
   
   raw_value = scale.get_units(10);
+  array_raw_value[u16_i++]=raw_value; 
   Serial.print("raw_value:\t");
   Serial.println(raw_value, 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided
+  if (10<=u16_i)
+  {
+    for (i=0;i<u16_i;i++)
+    {
+      average_raw_value=average_raw_value+array_raw_value[i];
+    }
+    average_raw_value=average_raw_value/u16_i;
+    Serial.print("average_raw_value:\t");
+    Serial.println(average_raw_value, 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided
+    u16_i=0;
+  }
 
-  masse = (12700*(raw_value+550))/53950;
-  Serial.print("masse:\t");
-  Serial.println(raw_value, 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided
-  u16_Poids = masse / 10;  // Poids en grammes
+  u16_Poids= (K_POIDS_REFERENCE*(raw_value+K_OFFSET_A_VIDE))/K_POIDS_BRUTE;
+  Serial.print("u16_Poids:\t");
+  Serial.println(u16_Poids, 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided 
   
   Serial.print("u16_Poids:\t");
   Serial.println(u16_Poids, 1);
@@ -264,9 +353,11 @@ void setup() {
   u8_ID_MAX = 0;
 
   /* body */
-  Serial.begin(38400);
+  Serial.begin(K_SERIAL);
   Init_Poids();
-  Init_Can();
+  Init_Can(); 
+  
+  setup_watchdog(9);// sleep mode
 }
 
 /*************************************************************/
@@ -279,7 +370,17 @@ void loop() {
   static unsigned int u8_ID_CAN;
 
   /* body */
-  Lecture_Poids(&u8_Poids_Moyen_high, &u8_Poids_Moyen_low, &u8_ID_CAN);
-  Envoi_Can(u8_Poids_Moyen_high, u8_Poids_Moyen_low, u8_ID_CAN);
-  Lecture_Can(&u8_ID_CAN);
+   if (f_wdt == 1)
+   {
+    f_wdt = 0; // Ne pas oublier d'initialiser le flag   
+    Lecture_Poids(&u8_Poids_Moyen_high, &u8_Poids_Moyen_low, &u8_ID_CAN);
+    Envoi_Can(u8_Poids_Moyen_high, u8_Poids_Moyen_low, K_RUCHE_ID_CAN_FRAME); // on fixe l'ID de la ruche à 2 !
+    Lecture_Can(&u8_ID_CAN);
+    enterSleep(); //Revenir en mode veille
+  } 
+  else  
+  {
+    /* Do nothing. */
+  }
+ 
 }

@@ -8,6 +8,12 @@ This is already handled in most of the Arduino libraries including “Seeeduino�
 Hence, for this stage, 1 second delay is used for the sake of simplicity. 
 /* Note : Replace 07194XXXXX with mobile number SMS should be sent to.  */
 #include <SoftwareSerial.h>
+//Optimisation de la consommation
+#include <avr/power.h>
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+
+#define K_MAX_ATTENTE 20 // attente de K_MAX_ATTENTE fois 8 secondes
 
 //SIM800 TX is connected to Arduino D8
 #define SIM800_TX_PIN 8
@@ -43,9 +49,70 @@ char url[ ]="http://api.thingspeak.com/update?api_key=I5U9GBQNMZICFSSV";
 
 unsigned long lastConnectionTime = 0;         // last time you connected to the server, in milliseconds
 const unsigned long postingInterval = 15000L; // delay between updates, in milliseconds
+volatile int f_wdt=1;
+volatile int u16_cpt_attente=0;
+
+
+
+void setup_watchdog(int ii) ;
+
+// Watchdog Interrupt Service est exécité lors d'un timeout du WDT
+ISR(WDT_vect) {
+  u16_cpt_attente++;
+  if (u16_cpt_attente>=K_MAX_ATTENTE)
+  {  
+    u16_cpt_attente=0;
+    if(f_wdt == 0) {
+     f_wdt = 1; // flag global 
+     }
+  }
+  else
+  {
+    ;
+  }
+}
+
+/******************************************************************************/
+/*                             SLEEP MODE                            */ 
+/******************************************************************************/
+
+/*************************************************************/
+/*                      SETUP WATCHDOG                       */
+/*************************************************************/
+// paramètre : 0=16ms, 1=32ms, 2=64ms, 3=128ms, 4=250ms, 5=500ms, 6=1 sec,7=2 sec, 8=4 sec, 9=8 sec
+void setup_watchdog(int ii) 
+{
+ byte bb;
+ int ww;
+ if (ii > 9 ) ii=9;
+ bb=ii & 7;
+ if (ii > 7) bb|= (1<<5);
+ bb|= (1<<WDCE);
+ ww=bb;
+ // Clear the reset flag
+ MCUSR &= ~(1<<WDRF);
+ // start timed sequence
+ WDTCSR |= (1<<WDCE) | (1<<WDE);
+ // set new watchdog timeout value
+ WDTCSR = bb;
+ WDTCSR |= _BV(WDIE);
+}
+
+/*************************************************************/
+/*                      ENTER SLEEP                          */
+/*************************************************************/
+void enterSleep(void) {
+ set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+ sleep_enable();
+ sleep_mode(); //Entre dans le mode veille choisi
+
+// Le programme va reprendre ici après le timeout du WDT
+
+ sleep_disable(); // La 1ère chose à faire est de désactiver le mode veille
+}
  
 /////////////////////////////////////////////////////////////// 
-//                SIM800 Internet Library                    //
+//                SIM800 Internet Library                    //2
 ///////////////////////////////////////////////////////////////  
 
 /*************************************************************/
@@ -54,42 +121,51 @@ const unsigned long postingInterval = 15000L; // delay between updates, in milli
 //Create software serial object to communicate with SIM800
 SoftwareSerial serialSIM800(SIM800_TX_PIN,SIM800_RX_PIN);
  
-//void Send_Sms() {
-//  String SIM_PIN_CODE = String( "1234" );
-//  serialSIM800.print("AT+CPIN=");
-//  serialSIM800.println( SIM_PIN_CODE );
-//  Serial.println("Setup OK");
-//  
-//  //Begin serial comunication with Arduino and Arduino IDE (Serial Monitor)
-//  Serial.begin(9600);
-//  while(!Serial);
-//   
-//  //Being serial communication witj Arduino and SIM800
-//  serialSIM800.begin(9600);
-//  delay(1000);
-//   
-//  Serial.println("Setup Complete!");
-//  Serial.println("Sending SMS...");
-//   
-//  //Set SMS format to ASCII
-//  serialSIM800.write("AT+CMGF=1\r\n");
-//  delay(1000);
-// 
-//  //Send new SMS command and message number
-//  ////serialSIM800.write("AT+CMGS=\"07194XXXXX\"\r\n");
-//  serialSIM800.write("AT+CMGS=\"0627765133\"\r\n");  //Working
-//  delay(1000);
-//   
-//  //Send SMS content
-//  serialSIM800.write("poids : %i");
-//  delay(1000);
-//   
-//  //Send Ctrl+Z / ESC to denote SMS message is complete
-//  serialSIM800.write((char)26);
-//  delay(1000);
-//     
-//  Serial.println("SMS Sent!");
-//}   
+void Send_Sms(unsigned char u8_ruche, float f_poids )  {
+  unsigned int u16_test;
+  String Data_SMS;
+  
+  String SIM_PIN_CODE = String( "1234" );
+  serialSIM800.print("AT+CPIN=");
+  serialSIM800.println( SIM_PIN_CODE );
+  Serial.println("Setup OK");
+  
+  //Begin serial comunication with Arduino and Arduino IDE (Serial Monitor)
+  Serial.begin(9600);
+  while(!Serial);
+   
+  //Being serial communication witj Arduino and SIM800
+  serialSIM800.begin(9600);
+  delay(1000);
+   
+  Serial.println("Setup Complete!");
+  Serial.println("Sending SMS...");
+   
+  //Set SMS format to ASCII
+  serialSIM800.write("AT+CMGF=1\r\n");
+  Serial.write(serialSIM800.read());
+  delay(1000);
+ 
+  //Send new SMS command and message number
+  ////serialSIM800.write("AT+CMGS=\"07194XXXXX\"\r\n");
+  serialSIM800.write("AT+CMGS=\"0627765133\"\r\n");  //Working
+  Serial.write(serialSIM800.read());
+  delay(1000);
+   
+  //Send SMS content 
+  Data_SMS = "Ruche #"+String(u8_ruche,1)+"\nPoids= "+String(f_poids,1)+" kg";
+  serialSIM800.print(Data_SMS); 
+  delay(1000);
+   
+  //Send Ctrl+Z / ESC to denote SMS message is complete
+  serialSIM800.print((char)26); 
+  delay(1000);
+
+   
+     
+  Serial.println("SMS Sent!"); 
+  
+}   
 
 
 /*************************************************************/
@@ -124,6 +200,7 @@ int8_t sendATcommand(const char* ATcommand, const char* expected_answer1, unsign
 	{
       ////response[x] = Serial.read();
       response[x] = serialSIM800.read();
+      serialSIM800.write(response);
       x++;
       // check if the desired answer is in the response of the module
       if (strstr(response, expected_answer1) != NULL)
@@ -262,100 +339,100 @@ void power_on()
 //}
 ///////////////////////////////////////////////////////////////
 
-//
-///////////////////////////////////////////////////////////////// 
-////                 MPC5125    CAN Library                    //
-///////////////////////////////////////////////////////////////// 
-///*************************************************************/
-///*            Module d'initialisation du CAN                 */
-///*************************************************************/
-//void Init_Can()
-//{
-//  SPI.begin();
-//
-//  mcp2515.reset();
-//  mcp2515.setBitrate(CAN_125KBPS);
-//  mcp2515.setNormalMode();
-//} 
-//
-//void Envoi_Can(char ID_CAN, char Reinit_Value)
-//{
-//  Serial.print("Envoi_Can:");
-//
-//  canMsg.can_id  = 0x0F6;
-//  canMsg.can_dlc = 8;
-//  //memcpy(&canMsg.data[0],&Poids,8);
-//  canMsg.data[0] = 0;
-//  canMsg.data[K_POS_ID_CAN_FRAME] = (char)ID_CAN;
-//  canMsg.data[K_POS_REINIT_CAN_FRAME] = (char)Reinit_Value;
-//
-//
-////#ifdef DEBUG
-////  Serial.println("*********** Envoi_Can ***********");
-////  Serial.print("canMsg.data[0]:");
-////  Serial.println(canMsg.data[0], 1);
-////  Serial.print("canMsg.data[1]:");
-////  Serial.println(canMsg.data[1], 1);
-////  Serial.print("canMsg.data[2]:");
-////  Serial.println(canMsg.data[2], 1);
-////  Serial.print("canMsg.data[3]:");
-////  Serial.println(canMsg.data[3], 1);
-////  Serial.print("canMsg.data[4]:");
-////  Serial.println(canMsg.data[4], 1);
-////  Serial.print("canMsg.data[5]:");
-////  Serial.println(canMsg.data[5], 1);
-////  Serial.print("canMsg.data[6]:");
-////  Serial.println(canMsg.data[6], 1);
-////  Serial.print("canMsg.data[7]:");
-////  Serial.println(canMsg.data[7], 1);
-////#endif
-//
-//  mcp2515.sendMessage(&canMsg);
-//
-//  Serial.println("Messages sent");
-//
-//  delay(100);
-//
-//}
-//
-//void Reinitalisation_Rucher() {
-//  Envoi_Can(0, KEY_REINIT);
-//  Serial.println("Reinitalisation_Rucher");
-//} 
-//
-///*************************************************************/
-///*            Module de lecture de Trames CAN                */
-///*************************************************************/
-//void Lecture_Can(float *f_poids_ruche)
-//{
-//  /*Init value*/ 
-//
-//  /* body */
-//  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
-////#ifdef DEBUG
-////    Serial.println("*********** Lecture CAN ***********");
-////    Serial.print(canMsg_Read.can_id, HEX); // print ID
-////    Serial.print(" ");
-////    Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
-////    Serial.print(" ");
-////#endif
-//
-////    for (int i = 0; i < canMsg_Read.can_dlc; i++)  { // print the data
-////
-////      //Serial.print(canMsg_Read.data[i],HEX);
-////      Serial.println(canMsg_Read.data[i], 1);
-////      //Serial.print(" "); 
-////    } 
-//
-//    *f_poids_ruche = canMsg_Read.data[0] *1000 + canMsg_Read.data[1]*10;  // u8_Poids_high *1000 + u8_Poids_low*10;
-//    *f_poids_ruche = *f_poids_ruche / 1000;
-//    
-////    Serial.print("*f_poids_ruche:");
-////    Serial.println(*f_poids_ruche, 1);
-//
-//  }
-//}
-//
+
+/////////////////////////////////////////////////////////////// 
+//                 MPC5125    CAN Library                    //
+/////////////////////////////////////////////////////////////// 
+/*************************************************************/
+/*            Module d'initialisation du CAN                 */
+/*************************************************************/
+void Init_Can()
+{
+  SPI.begin();
+
+  mcp2515.reset();
+  mcp2515.setBitrate(CAN_125KBPS);
+  mcp2515.setNormalMode();
+} 
+
+void Envoi_Can(char ID_CAN, char Reinit_Value)
+{ 
+
+  canMsg.can_id  = 0x0F6;
+  canMsg.can_dlc = 8;
+  //memcpy(&canMsg.data[0],&Poids,8);
+  canMsg.data[0] = 0;
+  canMsg.data[K_POS_ID_CAN_FRAME] = (char)ID_CAN;
+  canMsg.data[K_POS_REINIT_CAN_FRAME] = (char)Reinit_Value;
+
+
+//#ifdef DEBUG
+//  Serial.println("*********** Envoi_Can ***********");
+//  Serial.print("canMsg.data[0]:");
+//  Serial.println(canMsg.data[0], 1);
+//  Serial.print("canMsg.data[1]:");
+//  Serial.println(canMsg.data[1], 1);
+//  Serial.print("canMsg.data[2]:");
+//  Serial.println(canMsg.data[2], 1);
+//  Serial.print("canMsg.data[3]:");
+//  Serial.println(canMsg.data[3], 1);
+//  Serial.print("canMsg.data[4]:");
+//  Serial.println(canMsg.data[4], 1);
+//  Serial.print("canMsg.data[5]:");
+//  Serial.println(canMsg.data[5], 1);
+//  Serial.print("canMsg.data[6]:");
+//  Serial.println(canMsg.data[6], 1);
+//  Serial.print("canMsg.data[7]:");
+//  Serial.println(canMsg.data[7], 1);
+//#endif
+
+  mcp2515.sendMessage(&canMsg); 
+
+  delay(100);
+
+}
+
+void Reinitalisation_Rucher() {
+  Envoi_Can(0, KEY_REINIT);
+  Serial.println("Reinitalisation_Rucher");
+} 
+
+/*************************************************************/
+/*            Module de lecture de Trames CAN                */
+/*************************************************************/
+void Lecture_Can(unsigned char *pu8_ruche, float *pf_poids)
+{
+  /*Init value*/ 
+  unsigned int u16_poids;
+
+  /* body */
+  if (mcp2515.readMessage(&canMsg_Read) == MCP2515::ERROR_OK) {
+#ifdef DEBUG
+    Serial.println("*********** Lecture CAN ***********");
+    Serial.print(canMsg_Read.can_id, HEX); // print ID
+    Serial.print(" ");
+    Serial.print(canMsg_Read.can_dlc, HEX); // print DLC
+    Serial.print(" ");
+#endif
+
+    for (int i = 0; i < canMsg_Read.can_dlc; i++)  { // print the data
+
+      //Serial.print(canMsg_Read.data[i],HEX);
+      Serial.println(canMsg_Read.data[i], 1);
+      //Serial.print(" "); 
+    } 
+
+    u16_poids = canMsg_Read.data[0] *1000 + canMsg_Read.data[1]*10;  // u8_Poids_high *1000 + u8_Poids_low*10;
+    *pf_poids = float((float)u16_poids / 1000.0);
+
+    *pu8_ruche=0;
+    
+   Serial.print("*pf_poids :");
+   Serial.println(*pf_poids, 1);
+
+  }
+}
+
 //
 ///*************************************************************/
 ///*            Module d'envoi des données sur le NET          */
@@ -408,10 +485,12 @@ void power_on()
 /*                        setup                              */
 /*************************************************************/
 void setup() {
-  unsigned int answer=0;
+  unsigned int answer=0; 
   
   /* body */
   //pinMode(onModulePin, OUTPUT);
+  
+  setup_watchdog(9);// sleep mode
 
   //Begin serial comunication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
@@ -420,12 +499,12 @@ void setup() {
   serialSIM800.begin(9600);
   delay(1000);
   
- // Init_Can();
+  Init_Can();
 
 //  while (1) {  
 //    Send_Sms();
-//    
-//    String SIM_PIN_CODE = String( "1234" );
+    
+    //String SIM_PIN_CODE = String( "1234" );
 //    serialSIM800.print("AT+CPIN=");
 //    serialSIM800.println( SIM_PIN_CODE );
 //  
@@ -437,10 +516,10 @@ void setup() {
 
   
   //Reinitalisation_Rucher();
-  String SIM_PIN_CODE = String( "1234" );
-  serialSIM800.print("AT+CPIN=");
-  serialSIM800.println( SIM_PIN_CODE );
-  Serial.println("Setup OK");
+//  String SIM_PIN_CODE = String( "1234" );
+//  serialSIM800.print("AT+CPIN=");
+//  serialSIM800.println( SIM_PIN_CODE );
+//  Serial.println("Setup OK");
    
   Serial.println("Starting...");
   
@@ -456,46 +535,57 @@ void setup() {
 
 //  Test
   
-  answer = sendATcommand("AT\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  }
-      delay(100);
-  
-  answer = sendATcommand("AT+CSCLK=0\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  }
-      delay(100);
-  
-  answer = sendATcommand("AT+CFUN=1\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
-  if (answer == 0)
-  { 
-    Serial.println("Pas glop...");
-  }
-  else
-  {
-    Serial.println("Pas glop...");    
-  } 
-      delay(4000); 
-
-//  HTTPRequest(1, 5.5);
-  
-  
-  Serial.println("AT+HTTPPARA=\"URL\",\"www.castillolk.com.ve/WhiteList.txt\"\r\n");
-  
-  while( (sendATcommand("AT+CREG?\r\n", "+CREG: 0,1\r\n", 500) || 
-            sendATcommand("AT+CREG?\r\n", "+CREG: 0,5\r\n", 500)) == 0 );
+//  answer = sendATcommand("AT\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
+//  if (answer == 0)
+//  { 
+//    Serial.println("Pas glop...");
+//  }
+//  else
+//  {
+//    Serial.println("Glop...");    
+//  }
+//      delay(100);
+//  
+//  answer = sendATcommand("AT+CGMI=0\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
+//  if (answer == 0)
+//  { 
+//    Serial.println("Pas glop...");
+//  }
+//  else
+//  {
+//    Serial.println("Pas glop...");    
+//  }
+//      delay(100);
+//  
+//  answer = sendATcommand("AT+CSCLK=0\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
+//  if (answer == 0)
+//  { 
+//    Serial.println("Pas glop...");
+//  }
+//  else
+//  {
+//    Serial.println("Pas glop...");    
+//  }
+//      delay(100);
+//  
+//  answer = sendATcommand("AT+CFUN=1\r\n", "OK\r\n", TIMEOUT); //sortie  mise en veille profonde Dummie AT
+//  if (answer == 0)
+//  { 
+//    Serial.println("Pas glop...");
+//  }
+//  else
+//  {
+//    Serial.println("Glop...");    
+//  } 
+//      delay(4000); 
+//
+////  HTTPRequest(1, 5.5);
+//  
+//  
+//  Serial.println("AT+HTTPPARA=\"URL\",\"www.castillolk.com.ve/WhiteList.txt\"\r\n");
+//  
+//  while( (sendATcommand("AT+CREG?\r\n", "+CREG: 0,1\r\n", 500) || 
+//            sendATcommand("AT+CREG?\r\n", "+CREG: 0,5\r\n", 500)) == 0 );
 
   /* sendATcommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"\r\n", "OK\r\n", TIMEOUT);//sets Contype
   snprintf(aux_str, sizeof(aux_str), "AT+SAPBR=3,1,\"APN\",\"%s\"\r\n", apn);//sets APN
@@ -511,18 +601,29 @@ void setup() {
 /*************************************************************/
 void loop() {
   float f_poids;
-//  
-//  Lecture_Can(&f_poids);
-//   Serial.print("f_poids:");
-//   Serial.println(f_poids, 1);
-  //Envoi_Can(69, 51);
-  //Simulation_PeseRuche_Test();
-  
-  //Send_Sms();
-  // if 15 seconds have passed since your last connection,
-  // then connect again and send data
-  if (millis() - lastConnectionTime > postingInterval) 
-  {
-    //HTTPRequest(1, f_poids);
-  }
+  unsigned char u8_ruche;
+
+   if (f_wdt == 1)
+   {
+    Serial.print("GO");
+    f_wdt = 0; // Ne pas oublier d'initialiser le flag   
+      Lecture_Can(&u8_ruche, &f_poids);
+    //   Serial.print("f_poids:");
+    //   Serial.println(f_poids, 1);
+      Envoi_Can(69, 51);
+      //Simulation_PeseRuche_Test();
+      
+      Send_Sms(u8_ruche, f_poids);
+      // if 15 seconds have passed since your last connection,
+      // then connect again and send data
+      if (millis() - lastConnectionTime > postingInterval) 
+      {
+        //HTTPRequest(1, f_poids);
+      }
+    enterSleep(); //Revenir en mode veille
+   }
+   else
+   {
+    ;// do nothing
+   }
 }
